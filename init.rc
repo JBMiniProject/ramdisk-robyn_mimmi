@@ -79,6 +79,11 @@ loglevel 3
     write /proc/sys/kernel/sched_compat_yield 1
     write /proc/sys/kernel/sched_child_runs_first 0
     write /proc/sys/kernel/randomize_va_space 2
+    write /proc/sys/kernel/kptr_restrict 2
+    write /proc/sys/kernel/dmesg_restrict 1
+    write /proc/sys/vm/mmap_min_addr 32768
+    write /proc/sys/kernel/sched_rt_runtime_us 950000
+    write /proc/sys/kernel/sched_rt_period_us 1000000
 
 # Create cgroup mount points for process groups
     mkdir /dev/cpuctl
@@ -167,7 +172,9 @@ on post-fs-data
     mkdir /data/misc/systemkeys 0700 system system
     # give system access to wpa_supplicant.conf for backup and restore
     mkdir /data/misc/wifi 0770 wifi wifi
+    mkdir /data/misc/wifi/sockets 0770 wifi wifi
     chmod 0660 /data/misc/wifi/wpa_supplicant.conf
+    chown wifi.wifi /data/misc/wifi/wpa_supplicant.conf
     mkdir /data/local 0751 root root
     mkdir /data/local/tmp 0771 shell shell
     mkdir /data/data 0771 system system
@@ -422,6 +429,32 @@ on property:service.adb.root=1
     restart adbd
     write /sys/class/android_usb/android0/enable 1
 
+#needed for lights
+    chmod 0777 /sys/devices/virtual/misc/rgb_led/rgb_led/red:brightness
+    chmod 0777 /sys/devices/virtual/misc/rgb_led/rgb_led/green:brightness
+    chmod 0777 /sys/devices/virtual/misc/rgb_led/rgb_led/blue:brightness
+    chmod 0777 /sys/devices/virtual/misc/rgb_led/rgb_led/frequency
+    chmod 0777 /sys/devices/virtual/misc/rgb_led/rgb_led/pwm
+    chmod 0777 /sys/devices/virtual/misc/rgb_led/rgb_led/blink
+    chmod 0777 /sys/devices/virtual/misc/rgb_led/rgb_led/power
+    chmod 0777 /sys/devices/platform/msm_fb/leds/lcd-backlight/brightness
+    chmod 0777 /sys/devices/platform/msm_pmic_flash_led/cmaflash:enable
+    chmod 0777 /sys/devices/platform/msm_pmic_flash_led/spotlight:enable
+    chmod 0777 /sys/devices/platform/i2c-adapter/i2c-0/0-0036/br::intensity
+    chmod 0777 /sys/devices/platform/i2c-adapter/i2c-0/0-0036/mode
+    chmod 0777 /sys/devices/platform/msm_pmic_misc_led.0/brightness
+
+#needed for ril
+    mkdir /data/radio 0777
+
+# needed for sensors HAL:
+    mkdir /etc/sensors 0777
+    mkdir /dev/socket/sensors 0777 system system
+
+# nvimport FIX
+    mkdir /data/etc/ 0775
+    mkdir /data/etc/wifi 0775
+
 service servicemanager /system/bin/servicemanager
     class core
     user system
@@ -441,6 +474,7 @@ service netd /system/bin/netd
     class main
     socket netd stream 0660 root system
     socket dnsproxyd stream 0660 root inet
+   socket mdns stream 0660 root system
 
 service debuggerd /system/bin/debuggerd
     class main
@@ -530,6 +564,73 @@ service dumpstate /system/bin/dumpstate -s
     socket dumpstate stream 0660 shell log
     disabled
     oneshot
+
+service sshd /system/bin/start-ssh
+    class main
+    disabled
+
+service mdnsd /system/bin/mdnsd
+    class main
+    user mdnsr
+    group inet net_raw
+    socket mdnsd stream 0660 mdnsr inet
+    disabled
+    oneshot
+
+service wlan_loader /system/bin/wlan_loader -i /etc/wifi/tiwlan.ini -f /etc/wifi/tiwlan_firmware.bin -e /data/etc/wifi/fw
+    disabled
+    oneshot
+
+service wpa_supplicant /system/bin/wpa_supplicant -Dtiwlan0 -itiwlan0 -c/data/misc/wifi/wpa_supplicant.conf
+    socket wpa_tiwlan0 dgram 660 wifi wifi
+    disabled
+    oneshot
+
+service hostapd /system/bin/hostap /data/misc/wifi/hostapd.conf
+    class main
+    socket wpa_wlan1 dgram 660 wifi wifi
+    disabled
+    oneshot
+
+service dhcpcd_tiwlan0 /system/bin/dhcpcd -ABKL tiwlan0
+    class main
+    disabled
+    oneshot
+
+service dhcpcd_p2p /system/bin/dhcpcd -aABKL
+    class main
+    disabled
+    oneshot
+
+service dhcpcd_bnep0 /system/bin/dhcpcd -ABKL
+    class main
+    disabled
+    oneshot
+    
+service iprenew_tiwlan0 /system/bin/dhcpcd -n
+    class main
+    disabled
+    oneshot
+
+service iprenew_p2p /system/bin/dhcpcd -n
+    class main
+    disabled
+    oneshot
+
+service iprenew_bnep0 /system/bin/dhcpcd -n
+    class main
+    disabled
+    oneshot
+
+service wlan_ap_loader /system/bin/tiap_loader.sh
+    class main
+    disabled
+    oneshot
+
+service akmd /system/bin/akmd2
+    class main
+    user compass
+    group compass misc input system
 
 # adb over network
 on property:service.adb.tcp.port=5555

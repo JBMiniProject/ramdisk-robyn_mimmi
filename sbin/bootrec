@@ -1,6 +1,6 @@
 #!/sbin/sh
 # Script for booting into recovery
-# Author: nobodyAtall @ xda
+# Author: stelios97 @ xda
 
 recovery() {
 	# fixing CPU clocks to avoid issues in recovery

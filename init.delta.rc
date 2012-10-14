@@ -30,9 +30,14 @@ on post-fs-data
     setprop vold.post_fs_data_done 1
     mkdir /data/local/download 0771 system cache
     mkdir /cache/download 0771 system cache
+	
+on fs
+    # We don't support encryption on yaffs
+    setprop ro.crypto.state
 
 on boot
-    #radio fix
+    mount debugfs /sys/kernel/debug /sys/kernel/debug
+	#radio fix
     mkdir /data/radio 0775 radio radio
     mkdir /data/radio/log 0775 radio radio
     # bluetooth power up/down interface
@@ -119,6 +124,10 @@ service akmd /system/bin/akmd2
 
 service semc_chargalg /system/bin/semc_chargalg
     class main
+	
+service post_hw_config /system/bin/sh /post_hw_config.sh
+    class main
+    user root
 
 service hw_config /system/xbin/nice -n -20 /system/bin/sh /system/etc/hw_config.sh
     class main
@@ -208,3 +217,11 @@ service compcache /system/bin/handle_compcache
     user root
     group root
     oneshot
+
+# Bugreport (Holding down: volume down + volume up + power)
+service bugreport /system/bin/bugmailer.sh -v
+    class main
+    disabled
+    oneshot
+    keycodes 114 115 107
+	

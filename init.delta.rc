@@ -31,12 +31,7 @@ on post-fs-data
     mkdir /data/local/download 0771 system cache
     mkdir /cache/download 0771 system cache
 
-on fs
-    # We don't support encryption on yaffs
-    setprop ro.crypto.state
-
 on boot
-    mount debugfs /sys/kernel/debug /sys/kernel/debug
     #radio fix
     mkdir /data/radio 0775 radio radio
     mkdir /data/radio/log 0775 radio radio
@@ -130,16 +125,17 @@ service hw_config /system/xbin/nice -n -20 /system/bin/sh /system/etc/hw_config.
     user root
     oneshot
 
-service post_hw_config /system/bin/sh /post_hw_config.sh
-    class main
-    user root
-    oneshot
-
 service wlan_loader /system/bin/wlan_loader -i /etc/wifi/tiwlan.ini -f /etc/wifi/tiwlan_firmware.bin -e /data/etc/wifi/fw
     disabled
     oneshot
 
-service wpa_supplicant /system/bin/wpa_supplicant -Dtiwlan0 -itiwlan0 \ -c/data/misc/wifi/wpa_supplicant.conf
+service wpa_supplicant /system/bin/wpa_supplicant -Dtiwlan0 -itiwlan0 \   -puse_p2p_group_interface=1 -c /data/misc/wifi/wpa_supplicant.conf \ -e/etc/wifi/tiwlan_firmware.bin
+    class main
+    socket wpa_tiwlan0 dgram 660 wifi wifi
+    disabled
+    oneshot
+
+service p2p_supplicant /system/bin/wpa_supplicant -Dtiwlan0 -itiwlan0 \   -puse_p2p_group_interface=1 -c /data/misc/wifi/wpa_supplicant.conf
     class main
     socket wpa_tiwlan0 dgram 660 wifi wifi
     disabled
@@ -151,7 +147,7 @@ service hostapd /system/bin/hostap /data/misc/wifi/hostapd.conf
     disabled
     oneshot
 
-service dhcpcd_tiwlan0 /system/bin/dhcpcd -ABKL
+service dhcpcd_tiwlan0 /system/bin/dhcpcd -ABKL tiwlan0
     class main
     disabled
     oneshot
@@ -212,10 +208,3 @@ service compcache /system/bin/handle_compcache
     user root
     group root
     oneshot
-
-# Bugreport (Holding down: volume down + volume up + power)
-service bugreport /system/bin/bugmailer.sh -v
-    class main
-    disabled
-    oneshot
-    keycodes 114 115 107

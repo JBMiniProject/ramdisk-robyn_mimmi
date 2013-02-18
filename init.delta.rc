@@ -5,18 +5,20 @@ on init
 on early-boot
     #pre hw config
     exec /sbin/sh /pre_hw_config.sh
-    #boot into recovery
-    exec /sbin/bootrec
+    #boot into bootmenu
+    exec /sbin/bootmenu
 
 on post-fs
     exec /sbin/charger
 
 on early-init
-    export DOWNLOAD_CACHE /cache/download
-    export EXTERNAL_STORAGE /mnt/sdcard
-    mkdir /mnt/sdcard 0000 system system
+    export DOWNLOAD_CACHE /data/local/download
+    export EXTERNAL_STORAGE /storage/sdcard0
+    mkdir /storage 0050 system sdcard_r
+    mkdir /storage/sdcard0 0000 system system
     # for backwards compatibility
-    symlink /mnt/sdcard /sdcard
+    symlink /storage/sdcard0 /sdcard
+    symlink /storage/sdcard0 /mnt/sdcard
     mkdir /sd-ext 0771 system system
     export SD_EXT_DIRECTORY /sd-ext
 
@@ -30,14 +32,15 @@ on post-fs-data
     setprop vold.post_fs_data_done 1
     mkdir /data/local/download 0771 system cache
     mkdir /cache/download 0771 system cache
-	
+    mkdir /cache/recovery 0771 system cache
+
 on fs
     # We don't support encryption on yaffs
-    setprop ro.crypto.state
+    setprop ro.crypto.state unsupported
 
 on boot
     mount debugfs /sys/kernel/debug /sys/kernel/debug
-	#radio fix
+    #radio fix
     mkdir /data/radio 0775 radio radio
     mkdir /data/radio/log 0775 radio radio
     # bluetooth power up/down interface
@@ -59,6 +62,8 @@ on boot
     chown system system /sys/class/power_supply/battery/disable_charging
     chown system system /sys/devices/platform/i2c-adapter/i2c-0/0-0036/br::suspend
     chown system system /sys/devices/platform/i2c-adapter/i2c-0/0-0036/mode
+    chown system system /sys/devices/i2c-0/0-0036/br::suspend
+    chown system system /sys/devices/i2c-0/0-0036/mode
     chown system system /sys/devices/platform/mddi_hitachi_qvga/power_ctrl
     chown system system /sys/devices/platform/mddi_samsung_qvga/power_ctrl
     chown system system /sys/devices/platform/mddi_toshiba_hvga/power_ctrl
@@ -88,6 +93,8 @@ on boot
     chmod 0777 /sys/devices/platform/i2c-adapter/i2c-0/0-0036/br::intensity
     chmod 0777 /sys/devices/platform/i2c-adapter/i2c-0/0-0036/mode
     chmod 0777 /sys/devices/platform/msm_pmic_misc_led.0/brightness
+    chmod 0777 /sys/devices/i2c-0/0-0036/br::intensity
+    chmod 0777 /sys/devices/i2c-0/0-0036/mode
 
 #needed for ril
     mkdir /data/radio 0777
@@ -107,6 +114,12 @@ on property:init.svc.bluetoothd=running
     write /sys/devices/virtual/bluetooth/hci0/link_supervision_timeout 6400
     write /sys/devices/virtual/bluetooth/hci0/idle_timeout 7000
 
+service console_recovery /sbin/sh
+    class core
+    console
+    user root
+    group log
+
 service qmuxd /system/bin/qmuxd
     class main
 
@@ -124,12 +137,13 @@ service akmd /system/bin/akmd2
 
 service semc_chargalg /system/bin/semc_chargalg
     class main
-	
-service post_hw_config /system/bin/sh /post_hw_config.sh
-    class main
-    user root
 
 service hw_config /system/xbin/nice -n -20 /system/bin/sh /system/etc/hw_config.sh
+    class main
+    user root
+    oneshot
+
+service post_hw_config /system/bin/sh /post_hw_config.sh
     class main
     user root
     oneshot
@@ -138,14 +152,7 @@ service wlan_loader /system/bin/wlan_loader -i /etc/wifi/tiwlan.ini -f /etc/wifi
     disabled
     oneshot
 
-service wpa_supplicant /system/bin/wpa_supplicant -Dtiwlan0 -itiwlan0 \   -puse_p2p_group_interface=1 -c /data/misc/wifi/wpa_supplicant.conf \ -e/etc/wifi/tiwlan_firmware.bin
-    class main
-    socket wpa_tiwlan0 dgram 660 wifi wifi
-    disabled
-    oneshot
-
-service p2p_supplicant /system/bin/wpa_supplicant -Dtiwlan0 -itiwlan0 \   -puse_p2p_group_interface=1 -c /data/misc/wifi/wpa_supplicant.conf
-    class main
+service wpa_supplicant /system/bin/wpa_supplicant -Dtiwlan0 -itiwlan0 -c/data/misc/wifi/wpa_supplicant.conf
     socket wpa_tiwlan0 dgram 660 wifi wifi
     disabled
     oneshot
@@ -156,7 +163,7 @@ service hostapd /system/bin/hostap /data/misc/wifi/hostapd.conf
     disabled
     oneshot
 
-service dhcpcd_tiwlan0 /system/bin/dhcpcd -ABKL tiwlan0
+service dhcpcd_tiwlan0 /system/bin/dhcpcd -ABKL
     class main
     disabled
     oneshot
@@ -210,18 +217,3 @@ service nvimport /system/bin/nvimport
     class main
     user root
     oneshot
-
-# Until importing works
-service compcache /system/bin/handle_compcache
-    class main
-    user root
-    group root
-    oneshot
-
-# Bugreport (Holding down: volume down + volume up + power)
-service bugreport /system/bin/bugmailer.sh -v
-    class main
-    disabled
-    oneshot
-    keycodes 114 115 107
-	

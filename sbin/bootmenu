@@ -1,0 +1,73 @@
+#!/sbin/sh
+# Script for booting into recovery
+
+cpu_clock() {
+	echo "smartassV2" > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+	echo 600000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
+	echo 122880 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
+}
+
+umounts() {
+	mount -o remount,rw rootfs /
+	umount -l /system
+	umount -l /data
+	umount -l /cache
+	umount -l /mnt/sdcard
+}
+
+dirs() {
+	rm -r /sdcard
+	rm -r /not/sdcard
+	mkdir /sdcard
+	mkdir /tmp
+	rm /etc
+	mkdir /etc
+}
+
+mounts() {
+	cp /recovery.fstab /etc/recovery.fstab
+	mount /dev/block/mmcblk0p1 /sdcard
+	rm -rf /tmp/*
+}
+
+choose_rec() {
+	/sbin/recmenu &
+	/sbin/adbd recmenu
+}
+
+copy_modules() {
+	for x in `ls /modules/`
+	do
+		MD5SUM1=`md5sum /modules/$x | awk {'print $1'}`
+		MD5SUM2=`md5sum /system/lib/modules/$x | awk {'print $1'}`
+		if [ "$MD5SUM1" != "$MD5SUM2" ]
+		then
+			cp /modules/$x /system/lib/modules/$x
+		fi
+	done
+}
+
+cleanup() {
+	mount -o remount,rw /
+	RECVERSION=`strings /sbin/recovery|/system/xbin/grep Recovery | /system/xbin/head -n 1`
+	rm -rf `ls /sbin/* | grep -v adb |grep -v charger` /modules /res
+	echo $RECVERSION > /sbin/recovery
+	mount -o remount,ro /
+}
+
+sleep 2
+kill -9 $!
+if [ -s /dev/keycheck -o -e /cache/recovery/boot ]
+then
+	cpu_clock
+	rm /cache/recovery/boot
+	umounts
+	dirs
+	choose_rec
+else
+	mount -o remount,rw /system
+	mkdir -p /system/lib/modules/
+	copy_modules
+	mount -o remount,ro /system
+	cleanup
+fi
